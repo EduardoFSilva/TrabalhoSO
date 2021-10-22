@@ -11,10 +11,9 @@
  * Created on 22 de Outubro de 2021, 13:10
  */
 
-#include <iostream>
+#include <stdio.h>
 #include <unistd.h>
 
-using namespace std;
 
 /*
  * 
