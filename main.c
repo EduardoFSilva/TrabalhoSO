@@ -9,6 +9,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+//Biblioteca Posix pra mostrar o path
+#include <unistd.h>
+
+#define PATH_MAX 1024//tamanho maximo da string do path
 #define MAX_LINE 100 //tamanho maximo da linha de comando
 
 int main() {
@@ -16,10 +20,14 @@ int main() {
     char comando[MAX_LINE]; //string que recebera o comando
     char **args;            //ponteiro de argumentos
     int argc = 0;           //contador de argumentos
+    char cwd[PATH_MAX];     //variavel que contem o path do arquivo
+
+    
 
     while (1) {
 
-        printf("$ ");
+        getcwd(cwd, sizeof(cwd));            //comando getcwd pega o path do arquivo
+        printf("%s$ ",cwd);
         fgets(comando, MAX_LINE, stdin);     //recebendo string via teclado
         comando[strlen(comando) - 1] = '\0'; // removendo \n e inserindo o caractere nulo
 
