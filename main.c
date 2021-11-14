@@ -18,12 +18,14 @@
 #define WRITE_END 1 //Ponta de escrita
 
 
-char **linha_Comando(char *comando);
+char **linha_Comando(char *comando, int *arg);
+int contar_Pipes(char **comando, int argc);
+void executar_Comando(int qtdPipes,char** args,int argc);
 
 int main() {
 
     char comando[MAX_LINE], cwd[PATH_MAX]; //string que recebera o comando e Path
-
+    int argc = 0;
     while (1) {
 
         getcwd(cwd, sizeof(cwd));            //comando getcwd pega o path do arquivo
@@ -35,63 +37,96 @@ int main() {
 
         //tratar os erros
         //criar um processo para cada novo comando
-        int pid = fork();
-        assert(pid > 0 || pid == 0); //vai assegurar de que o processo tenha sido alocado com sucesso
 
-        if (pid == 0) { //está no processo filho
-            int i = 0;
+         int pid = fork();
+         assert(pid > 0 || pid == 0); //vai assegurar de que o processo tenha sido alocado com sucesso
 
-            char **args = linha_Comando(comando);
+         if (pid == 0) { //está no processo filho
 
-            //enviando argumentos pro exec
-            int error = execvp(args[0], args);
+             argc = 0; //a cada novo processo, o numero de argumentos deve ser zerado
+             char **args = linha_Comando(comando, &argc); //montando a linha de comando e obtendo o numero de argumentos
 
-            if (error == -1) { //funcao execvp() retorna -1 em caso de erro
+             int qtd_Pipes = contar_Pipes(args, argc); //obtendo a quantidade de pipes a ser feita
 
-                fprintf(stderr, "Comando desconhecido\n");
-                exit(1);
-            }
+             if(qtd_Pipes) //é um comando com pipe
+                 executar_Comando(qtd_Pipes,args,argc); //vai pra outra subrotina
+             else{ //é um comando simples
 
-        } else if (pid > 0) {
+                 //enviando argumentos pro exec
+                 int error = execvp(args[0], args);
 
-            //espera o processo filho terminar
-            wait(NULL);
-        } else {
+                 if (error == -1) { //funcao execvp() retorna -1 em caso de erro
 
-            fprintf(stderr, "Erro ao alocar processo !");
-            exit(1);
+                     fprintf(stderr, "Comando desconhecido\n");
+                     exit(1);
+                 }
+
+             }
+
+
+
+         } else if (pid > 0) {
+
+             //espera o processo filho terminar
+             wait(NULL);
+         } else {
+
+             fprintf(stderr, "Erro ao alocar processo !");
+             exit(1);
+
+         }
 
         }
+
     }
+    void executar_Comando(int qtdPipes,char** args,int argc){
+
+
+
+
 
 
 }
 
-char **linha_Comando(char *comando) {
+    int contar_Pipes(char **comando, int argc) {
 
-    char **args = NULL;
-    int argc = 0, i = 0;
+        int pipes = 0;
 
-    for (i = 0; i < strlen(comando); i++) { //conta a quantidade de argumentos
+        for (int i = 0; i < argc + 1; i++) {
 
-        if (comando[i] == ' ')
-            argc++;
+            if (!strcmp(comando[i], "|"))
+                pipes++;
+
+        }
+
+        return pipes;
+
     }
 
-    //aloca vetor de strings baseado na quantidade de argumentos
-    args = (char **) malloc((argc + 1) * sizeof(char *));
+    char **linha_Comando(char *comando, int *arg) {
 
-    //inserindo o token na primeira posicao
-    i = 0;
-    char *token = strtok(comando, " ");
-    //preenchendo o restante do array de strings com os argumentos
-    while (token != NULL) {
-        args[i] = token;
-        token = strtok(NULL, " ");
-        i++;
+        char **args = NULL;
+        int argc = 0, i = 0;
+
+        for (i = 0; i < strlen(comando); i++) { //conta a quantidade de argumentos
+            if (comando[i] == ' ')
+                argc++;
+        }
+        //aloca vetor de strings baseado na quantidade de argumentos
+        args = (char **) malloc((argc + 1) * sizeof(char *));
+        //inserindo o token na primeira posicao
+        i = 0;
+        char *token = strtok(comando, " ");
+        //preenchendo o restante do array de strings com os argumentos
+        while (token != NULL) {
+            args[i] = token;
+            token = strtok(NULL, " ");
+            i++;
+        }
+        args[i] = NULL;
+
+
+        *arg = argc;
+        return args;
+
     }
-     args[i] = NULL;
-
-    return args;
-
-}
