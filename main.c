@@ -19,14 +19,10 @@
 #define WRITE_END 1 //Ponta de escrita
 
 
-<<<<<<< Updated upstream
 char **linha_Comando(char *comando, int *arg);
-int contar_Pipes(char **comando, int argc);
+int *posicoes_pipes(char **comando, int argc);
 void executar_Comando(int qtdPipes,char** args,int argc);
-=======
-char **linha_Comando(char *comando);
-int contador_pipes(char *comando);
->>>>>>> Stashed changes
+
 
 int main() {
 
@@ -34,14 +30,11 @@ int main() {
 
     int fd[2];//pipe 1
     int fd2[2];//pipe 2
-    int verpipe;
+    int *verpipe;
     char comando[MAX_LINE], cwd[PATH_MAX]; //string que recebera o comando e Path
-<<<<<<< Updated upstream
-    int argc = 0;
-=======
 
+    int argc = 0;       //contador de argumentos
 
->>>>>>> Stashed changes
     while (1) {
 
         getcwd(cwd, sizeof(cwd));            //comando getcwd pega o path do arquivo
@@ -54,177 +47,105 @@ int main() {
             exit(0); //se o comando digitado for "sair"
         }
 
-<<<<<<< Updated upstream
+
+        verpipe= posicoes_pipes(comando);        //percorre a string e verifica se tem algum pipe e recolhe suas posições, se houverem
+
+        if (verpipe!=NULL)
+        {
+            //função ping pong
+        }
+
+        // Se não tiver nenhum pipe, o programa já executa o comando direto
+        else
+        {
+            executar_Comando;
+        }
+
+    }
+
+//cria o fork e executa o comando
+void executar_Comando(int qtdPipes,char** args,int argc)
+{
         //tratar os erros
         //criar um processo para cada novo comando
+        int pid = fork();
+        assert(pid > 0 || pid == 0); //vai assegurar de que o processo tenha sido alocado com sucesso
 
-         int pid = fork();
-         assert(pid > 0 || pid == 0); //vai assegurar de que o processo tenha sido alocado com sucesso
+        if (pid == 0) { //está no processo filho
 
-         if (pid == 0) { //está no processo filho
+            char **args = linha_Comando(comando);
 
-             argc = 0; //a cada novo processo, o numero de argumentos deve ser zerado
-             char **args = linha_Comando(comando, &argc); //montando a linha de comando e obtendo o numero de argumentos
+            //enviando argumentos pro exec
+            int error = execvp(args[0], args);
 
-             int qtd_Pipes = contar_Pipes(args, argc); //obtendo a quantidade de pipes a ser feita
+            if (error == -1) { //funcao execvp() retorna -1 em caso de erro
 
-             if(qtd_Pipes) //é um comando com pipe
-                 executar_Comando(qtd_Pipes,args,argc); //vai pra outra subrotina
-             else{ //é um comando simples
+                fprintf(stderr, "Comando desconhecido\n");
+                exit(1);
+            }
 
-                 //enviando argumentos pro exec
-                 int error = execvp(args[0], args);
+        } else if (pid > 0) {
 
-                 if (error == -1) { //funcao execvp() retorna -1 em caso de erro
+            //espera o processo filho terminar
+            wait(NULL);
+        } 
 
-                     fprintf(stderr, "Comando desconhecido\n");
-                     exit(1);
-                 }
+        exit(0);
+}
 
-             }
+//contar quantos pipes tem
+int *posicoes_pipes(char **comando, int argc) {
+        
+        int posicoes[argc];
+        int indice;
 
+        indice=0;
 
+        for (int i = 0; i < argc + 1; i++) {
+            if (!strcmp(comando[i], "|"))
+                pipes++;
+                posicoes[indice]=i;
+                indice++;
+        }
 
-         } else if (pid > 0) {
-
-             //espera o processo filho terminar
-             wait(NULL);
-         } else {
-
-             fprintf(stderr, "Erro ao alocar processo !");
-             exit(1);
-
-         }
-=======
-        verpipe=contador_pipes(comando);
-
-        if (verpipe>0)
+        if(pipes=0)
         {
-            //cria o 1º pipe
-            if(pipe(fp)==-1)
-            {
-                perror("Erro ao criar o pipe 1, finalizando o programa....\n\n");
-                exit(1);
-            }
-            //cria o 2º pipe
-            if(pipe(fp2)==-1)
-            {
-                perror("Erro ao criar o pipe 2, finalizando o programa....\n\n");
-                exit(1);
-            }
-            
+            return NULL;
         }
 
         else
         {
-            //tratar os erros
-            //criar um processo para cada novo comando
-            int pid = fork();
-            assert(pid > 0 || pid == 0); //vai assegurar de que o processo tenha sido alocado com sucesso
-
-            if (pid == 0) { //está no processo filho
-
-                char **args = linha_Comando(comando);
-
-                //enviando argumentos pro exec
-                int error = execvp(args[0], args);
-
-                if (error == -1) { //funcao execvp() retorna -1 em caso de erro
-
-                    fprintf(stderr, "Comando desconhecido\n");
-                    exit(1);
-                }
-
-            } else if (pid > 0) {
-
-                //espera o processo filho terminar
-                wait(NULL);
-            } 
-            else 
-            {
->>>>>>> Stashed changes
-
-                fprintf(stderr, "Erro ao alocar processo !");
-                exit(1);
-
-            }
+            return posicoes;
         }
-
     }
-    void executar_Comando(int qtdPipes,char** args,int argc){
+
+//monta a linha de comando
+char **linha_Comando(char *comando, int *arg) 
+{
+
+    char **args = NULL;
+    int argc = 0, i = 0;
 
 
-
-
-
-    exit(0);
-}
-
-    int contar_Pipes(char **comando, int argc) {
-
-        int pipes = 0;
-
-        for (int i = 0; i < argc + 1; i++) {
-
-<<<<<<< Updated upstream
-            if (!strcmp(comando[i], "|"))
-                pipes++;
-
-        }
-
-        return pipes;
-=======
-        if (comando[i] == ' ' ||comando[i] == '|')
+    for (i = 0; i < strlen(comando); i++) { //conta a quantidade de argumentos
+        if (comando[i] == ' ')
             argc++;
     }
->>>>>>> Stashed changes
-
+    //aloca vetor de strings baseado na quantidade de argumentos
+    args = (char **) malloc((argc + 1) * sizeof(char *));
+    //inserindo o token na primeira posicao
+    i = 0;
+    char *token = strtok(comando, " ");
+    //preenchendo o restante do array de strings com os argumentos
+    while (token != NULL) {
+        args[i] = token;
+        token = strtok(NULL, " ");
+        i++;
     }
-
-    char **linha_Comando(char *comando, int *arg) {
-
-        char **args = NULL;
-        int argc = 0, i = 0;
-
-<<<<<<< Updated upstream
-        for (i = 0; i < strlen(comando); i++) { //conta a quantidade de argumentos
-            if (comando[i] == ' ')
-                argc++;
-        }
-        //aloca vetor de strings baseado na quantidade de argumentos
-        args = (char **) malloc((argc + 1) * sizeof(char *));
-        //inserindo o token na primeira posicao
-        i = 0;
-        char *token = strtok(comando, " ");
-        //preenchendo o restante do array de strings com os argumentos
-        while (token != NULL) {
-            args[i] = token;
-            token = strtok(NULL, " ");
-            i++;
-        }
-        args[i] = NULL;
+    args[i] = NULL;
 
 
-        *arg = argc;
-        return args;
+    *arg = argc;
+    return args;
 
-    }
-=======
 }
-
-
-contador_pipes(char *comando)
-{
-    int i,cont;
-    
-    for(i =0;i>strlen(comando);i++)
-    {
-        if(comand[i]=='|')
-        {
-            cont++;
-        }
-    }
-
-    return cont;
-}
->>>>>>> Stashed changes
