@@ -19,8 +19,9 @@
 #define WRITE_END 1 //Ponta de escrita
 
 char **linha_Comando(char *comando, int *arg);
-int *posicoes_pipes(char **comando, int argc);
+int *posicoes_pipes(char **comando, int argc,int* qtd_Pipes);
 void executar_Comando(char **args);
+void executar_ComandoPipe(char** args,int* pipe,int qtdPipes);
 
 int main() {
 
@@ -28,10 +29,10 @@ int main() {
 
     int fd[2];//pipe 1
     int fd2[2];//pipe 2
-    int *verpipe;
+    int *vetpipe = NULL;
     char comando[MAX_LINE], cwd[PATH_MAX]; //string que recebera o comando e Path
 
-    int argc = 0;       //contador de argumentos
+    int argc = 0,qtdPipes=0;       //contador de argumentos
 
     while (1) {
 
@@ -44,23 +45,44 @@ int main() {
             exit(0); //se o comando digitado for "sair"
         }
 
-        argc = 0;
+        argc = 0,qtdPipes=0;
         char** linhaComando = linha_Comando(comando,&argc);
-        verpipe = posicoes_pipes(linhaComando,argc);        //percorre a string e verifica se tem algum pipe e recolhe suas posições, se houverem
+        vetpipe = posicoes_pipes(linhaComando,argc,&qtdPipes);        //percorre a string e verifica se tem algum pipe e recolhe suas posições, se houverem
 
-        if (verpipe) {
+        if (vetpipe!=NULL) {
 
-            //executar_ComandoPipe(linhadeComando,VetorPipe,qtdPipes);
+            executar_ComandoPipe(linhaComando,vetpipe,qtdPipes);
 
-        }
-
-        else { // Se não tiver nenhum pipe, o programa já executa o comando direto
+        }else { // Se não tiver nenhum pipe, o programa já executa o comando direto
 
             executar_Comando(linhaComando);
         }
 
     }
+    exit(0);
 }
+
+void executar_ComandoPipe(char** args,int* pipe,int qtdPipes){
+
+    int pid = fork();
+    assert(pid > 0 || pid == 0); //vai assegurar de que o processo tenha sido alocado com sucesso
+
+    if (pid == 0) { //está no processo filho
+
+        printf("\nTa no pipe !");
+
+    } else if (pid > 0) {
+
+        //espera o processo filho terminar
+        wait(NULL);
+    }else{
+
+        fprintf(stderr,"\nErro ao alocar processo !");
+        exit(1);
+    }
+
+}
+
 
 //cria o fork e executa o comando
 void executar_Comando(char **args) {
@@ -89,31 +111,29 @@ void executar_Comando(char **args) {
             exit(1);
         }
 
-        exit(0);
-
 }
 
-
-
 //contar quantos pipes tem
-int *posicoes_pipes(char **comando, int argc) {
+int *posicoes_pipes(char **comando, int argc,int *qtd_Pipes) {
 
-        int posicoes[argc];
-        int indice;
-
-        indice = 0;
+        int *posicoes = (int*)malloc(argc * sizeof(int));
+        int indice=0;
 
         for (int i = 0; i < argc + 1; i++) {
-            if (!strcmp(comando[i], "|"))
+            if (strcmp(comando[i], "|")==0){
                 posicoes[indice] = i;
                 indice++;
+            }
+
         }
 
-        if (indice == 0) {
+        *qtd_Pipes = indice;
+
+        if (!indice)
             return NULL;
-        } else {
+         else
             return posicoes;
-        }
+
 }
 
 //monta a linha de comando
