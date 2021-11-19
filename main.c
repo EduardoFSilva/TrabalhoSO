@@ -19,25 +19,21 @@
 #define WRITE_END 1 //Ponta de escrita
 
 char **linha_Comando(char *comando, int *arg);
-int *posicoes_pipes(char **comando, int argc,int* qtd_Pipes);
-void executar_Comando(char **args);
-void executar_ComandoPipe(char** args,int* pipe,int qtdPipes);
+
+void executar_Comando(char **args, int argP);
+
+char **separar_Args(char **args, int pos);
 
 int main() {
 
-    setlocale(LC_ALL,"Portuguese");        //comando q3ue possibilita a utilização de sinais gráficos da língua portuguesa
-
-    int fd[2];//pipe 1
-    int fd2[2];//pipe 2
-    int *vetpipe = NULL;
+    setbuf(stdout, NULL);
     char comando[MAX_LINE], cwd[PATH_MAX]; //string que recebera o comando e Path
-
-    int argc = 0,qtdPipes=0;       //contador de argumentos
+    int argP = 0; //contador de Pipes
 
     while (1) {
 
         getcwd(cwd, sizeof(cwd));            //comando getcwd pega o path do arquivo
-        printf("%s$ ", cwd);
+        printf("\n%s$ ", cwd);
         fgets(comando, MAX_LINE, stdin);     //recebendo string via teclado
         comando[strlen(comando) - 1] = '\0'; // removendo \n e inserindo o caractere nulo
 
@@ -45,122 +41,162 @@ int main() {
             exit(0); //se o comando digitado for "sair"
         }
 
-        argc = 0,qtdPipes=0;
-        char** linhaComando = linha_Comando(comando,&argc);
-        vetpipe = posicoes_pipes(linhaComando,argc,&qtdPipes);        //percorre a string e verifica se tem algum pipe e recolhe suas posições, se houverem
+        pid_t pid = fork();
 
-        if (vetpipe!=NULL) {
+        if (pid == 0) { //está no filho, executar o comando
 
-            executar_ComandoPipe(linhaComando,vetpipe,qtdPipes);
+            argP = 0;
+            char **linhaComando = linha_Comando(comando, &argP);
 
-        }else { // Se não tiver nenhum pipe, o programa já executa o comando direto
+            executar_Comando(linhaComando, argP);
+            exit(0);
 
-            executar_Comando(linhaComando);
+        } else if (pid > 0) { //está no pai, esperar o filho
+
+            wait(NULL);
+        } else { //deu ruim
+
+            fprintf(stderr, "\nErro ao alocar processo !");
+            exit(1);
         }
 
     }
     exit(0);
 }
 
-void executar_ComandoPipe(char** args,int* pipe,int qtdPipes){
+//cria o fork e executa o comando
+void executar_Comando(char **args, int argP) {
 
-    int pid = fork();
-    assert(pid > 0 || pid == 0); //vai assegurar de que o processo tenha sido alocado com sucesso
+    if (argP == 0) { //nao tem pipe, comando simples
 
-    if (pid == 0) { //está no processo filho
-
-        printf("\nTa no pipe !");
-
-    } else if (pid > 0) {
-
-        //espera o processo filho terminar
-        wait(NULL);
-    }else{
-
-        fprintf(stderr,"\nErro ao alocar processo !");
+        //separando os argumentos
+        args = separar_Args(args, 0);
+        //enviando argumentos pro exec
+        execvp(args[0], args);
+        //caso dê ruim no exec
+        perror("\nComando desconhecido");
         exit(1);
+
+    } else { //tem Pipe
+
+        int fd[2];
+        if (pipe(fd) == -1) {
+
+            fprintf(stderr, "\nFalha na criacao do pipe()");
+            exit(1);
+        }
+
+        if(fork()==0){
+
+            close(STDIN_FILENO);
+            dup(fd[READ_END]);
+            close(fd[READ_END]);
+            close(fd[WRITE_END]);
+
+            char** argAux = separar_Args(args,1);
+
+            execvp(argAux[0],argAux);
+            perror("\nComando desconhecido");
+            exit(1);
+        }
+
+        //fechando as saidas,leituras e amarrando com o dup
+        close(STDOUT_FILENO);
+        dup(fd[WRITE_END]);
+        close(fd[WRITE_END]);
+        close(fd[READ_END]);
+
+        char** argAux = separar_Args(args,0);
+
+        execvp(argAux[0],argAux);
+        perror("\nComando desconhecido");
+        exit(1);
+
+
     }
 
 }
 
 
-//cria o fork e executa o comando
-void executar_Comando(char **args) {
-
-        int pid = fork();
-        assert(pid > 0 || pid == 0); //vai assegurar de que o processo tenha sido alocado com sucesso
-
-        if (pid == 0) { //está no processo filho
-
-            //enviando argumentos pro exec
-            int error = execvp(args[0], args);
-
-            if (error == -1) { //funcao execvp() retorna -1 em caso de erro
-
-                fprintf(stderr, "Comando desconhecido\n");
-                exit(1);
-            }
-
-        } else if (pid > 0) {
-
-            //espera o processo filho terminar
-            wait(NULL);
-        }else{
-
-            fprintf(stderr,"\nErro ao alocar processo !");
-            exit(1);
-        }
-
-}
-
-//contar quantos pipes tem
-int *posicoes_pipes(char **comando, int argc,int *qtd_Pipes) {
-
-        int *posicoes = (int*)malloc(argc * sizeof(int));
-        int indice=0;
-
-        for (int i = 0; i < argc + 1; i++) {
-            if (strcmp(comando[i], "|")==0){
-                posicoes[indice] = i;
-                indice++;
-            }
-
-        }
-
-        *qtd_Pipes = indice;
-
-        if (!indice)
-            return NULL;
-         else
-            return posicoes;
-
-}
-
 //monta a linha de comando
 char **linha_Comando(char *comando, int *arg) {
 
-        char **args = NULL;
-        int argc = 0, i = 0;
+    char **args = NULL;
+    int argc = 0, i = 0;
 
-        for (i = 0; i < strlen(comando); i++) { //conta a quantidade de argumentos
-            if (comando[i] == ' ')
-                argc++;
-        }
+    for (i = 0; i < strlen(comando); i++) { //conta a quantidade de pipes
+        if (comando[i] == '|')
+            argc++;
+    }
+
+    if (argc > 0) {
+
         //aloca vetor de strings baseado na quantidade de argumentos
         args = (char **) malloc((argc + 1) * sizeof(char *));
         //inserindo o token na primeira posicao
         i = 0;
-        char *token = strtok(comando, " ");
+        char *token = strtok(comando, "|");
         //preenchendo o restante do array de strings com os argumentos
         while (token != NULL) {
             args[i] = token;
-            token = strtok(NULL, " ");
+            token = strtok(NULL, "|");
             i++;
         }
         args[i] = NULL;
 
         *arg = argc;
-        return args;
+
+    } else {
+
+        args = (char **) malloc(sizeof(char *));
+        args[0] = comando;
+
+    }
+
+    return args;
 
 }
 
+char **separar_Args(char **args, int pos) {
+
+    int argc = 0;
+    char *comando = args[pos];
+    char **argsAux = NULL;
+
+    for (int i = 0; i < strlen(comando); i++) { //conta a quantidade de argumentos
+
+        if (comando[i] == ' ')
+            argc++;
+
+    }
+
+    if (argc > 0) { //significa que tem argumentos para serem separados
+
+        // aloca novo vetor de strings pro tamanho adequado de argumentos
+        argsAux = (char **) malloc((argc + 1) * sizeof(char *));
+
+        //hora de quebrar a string e obter os argumentos
+        char *token = strtok(comando, " ");
+        int i = 0;
+
+        while (token) {
+
+            argsAux[i] = token;
+            token = strtok(NULL, " ");
+            i++;
+
+        }
+        argsAux[i] = NULL; //ultima posicao deve sempre terminar NULL
+
+
+    } else {
+
+        argsAux = (char **) malloc(sizeof(char **));
+        argsAux[0] = args[pos];
+
+
+    }
+
+    return argsAux;
+
+}
